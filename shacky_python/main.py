@@ -14,8 +14,8 @@ from typing import Dict, List, Tuple
 import pygame
 
 # Grid and rendering constants (match original layout proportions)
-MAP_W = 110
-MAP_H = 50
+MAP_W = 72
+MAP_H = 36
 VIEW_W = 11
 VIEW_H = 5
 TILE = 50
@@ -199,8 +199,8 @@ class Game:
         self.sprites = self._load_sprites()
         self.map_data = self._load_or_generate_map()
 
-        self.player_x = 15
-        self.player_y = 40
+        self.player_x = 8
+        self.player_y = 30
         self.player_facing = "r"
 
         self.hp = 200
@@ -211,6 +211,7 @@ class Game:
         self.shoes_num = 0
         self.gem_num = 0
         self.mes_num = 0
+        self.special_positions = self._find_special_positions()
 
         self.monsters: List[Monster] = []
         self.break_game = False
@@ -267,40 +268,55 @@ class Game:
                     lines.append("0" * MAP_W)
                 return [[c for c in row] for row in lines]
 
-        # Fallback handcrafted map when original map2.map is missing.
-        grid = [["0" for _ in range(MAP_W)] for _ in range(MAP_H)]
+        # Fallback handcrafted map when no map file is present.
+        grid = [["1" for _ in range(MAP_W)] for _ in range(MAP_H)]
         for y in range(MAP_H):
             for x in range(MAP_W):
                 if x in (0, MAP_W - 1) or y in (0, MAP_H - 1):
-                    grid[y][x] = "1"
-                elif (x * y) % 37 == 0:
-                    grid[y][x] = "1"
-                elif (x + 2 * y) % 71 == 0:
                     grid[y][x] = "2"
-                elif (x - y) % 53 == 0:
+                elif (x + 2 * y) % 17 == 0:
+                    grid[y][x] = "2"
+
+        # Carve trails.
+        for x in range(2, MAP_W - 2):
+            grid[30][x] = "0"
+        for y in range(6, MAP_H - 2):
+            grid[y][8] = "0"
+        for y in range(4, MAP_H - 3):
+            grid[y][58] = "0"
+        for x in range(8, 59):
+            grid[10][x] = "0"
+
+        # Large water with island.
+        cx, cy, rx, ry = 53, 16, 14, 9
+        for y in range(2, MAP_H - 2):
+            for x in range(2, MAP_W - 2):
+                if ((x - cx) * (x - cx)) / (rx * rx) + ((y - cy) * (y - cy)) / (ry * ry) <= 1.0:
                     grid[y][x] = "3"
+        icx, icy, irx, iry = 55, 16, 4, 3
+        for y in range(icy - iry - 1, icy + iry + 2):
+            for x in range(icx - irx - 1, icx + irx + 2):
+                if 0 <= x < MAP_W and 0 <= y < MAP_H:
+                    if ((x - icx) * (x - icx)) / (irx * irx) + ((y - icy) * (y - icy)) / (iry * iry) <= 1.0:
+                        grid[y][x] = "0"
 
-        # Keep start area mostly open.
-        for yy in range(35, 47):
-            for xx in range(8, 23):
-                grid[yy][xx] = "0"
-
-        # Key story tiles (Pascal coordinates are 1-based).
-        grid[6 - 1][13 - 1] = "c"   # chocolate cave event
-        grid[41 - 1][17 - 1] = "h"  # tomb/grave
-        grid[43 - 1][96 - 1] = "A"  # Anya house
-        grid[8 - 1][89 - 1] = "v"   # shoe merchant
-        grid[29 - 1][102 - 1] = "C" # cave end / princess
-
-        # Visible cave/wall cluster near end.
-        for xx in range(97, 109):
-            grid[27 - 1][xx - 1] = "w"
-            grid[31 - 1][xx - 1] = "w"
-        for yy in range(27, 32):
-            grid[yy - 1][97 - 1] = "w"
-            grid[yy - 1][108 - 1] = "w"
+        # Story points.
+        grid[31][14] = "c"   # chocolate cave
+        grid[8][18] = "h"    # tomb
+        grid[17][5] = "v"    # shoe maker (opposite side)
+        grid[16][55] = "A"   # goddess on island
+        grid[16][58] = "C"   # stage-end cave marker on island
 
         return grid
+
+    def _find_special_positions(self) -> Dict[str, Tuple[int, int]]:
+        found: Dict[str, Tuple[int, int]] = {}
+        for y in range(MAP_H):
+            for x in range(MAP_W):
+                ch = self.map_data[y][x]
+                if ch in {"c", "h", "A", "v", "C"} and ch not in found:
+                    found[ch] = (x, y)
+        return found
 
     def wrap(self, x: int, y: int) -> Tuple[int, int]:
         return x % MAP_W, y % MAP_H
@@ -427,6 +443,22 @@ class Game:
                 self._appear_monster(who)
         self.last_spawn_ms = now
 
+    def _monster_region_ok(self, who: str, x: int, y: int) -> bool:
+        right_water_band = x >= int(MAP_W * 0.58) and 6 <= y <= int(MAP_H * 0.72)
+        north_mountains = y <= int(MAP_H * 0.38)
+        west_forest = x <= int(MAP_W * 0.40)
+        deep_east = x >= int(MAP_W * 0.62) and y >= int(MAP_H * 0.45)
+
+        if who == "f":
+            return west_forest or not north_mountains
+        if who == "s":
+            return north_mountains
+        if who == "b":
+            return right_water_band
+        if who == "S":
+            return deep_east
+        return True
+
     def _visible_world_positions(self) -> set[Tuple[int, int]]:
         visible: set[Tuple[int, int]] = set()
         for vy in range(VIEW_H):
@@ -458,24 +490,26 @@ class Game:
         return True
 
     def _appear_monster(self, who: str) -> None:
-        choice = random.randint(0, 3)
-        if choice == 0:
-            tx = self.player_x - 1
-            ty = self.player_y + random.randint(0, 3)
-        elif choice == 1:
-            tx = self.player_x + random.randint(0, 9)
-            ty = self.player_y - 1
-        elif choice == 2:
-            tx = self.player_x + 10
-            ty = self.player_y + random.randint(0, 3)
-        else:
-            tx = self.player_x + random.randint(0, 9)
-            ty = self.player_y + 4
-        tx, ty = self.wrap(tx, ty)
+        for _ in range(10):
+            choice = random.randint(0, 3)
+            if choice == 0:
+                tx = self.player_x - 1
+                ty = self.player_y + random.randint(0, 3)
+            elif choice == 1:
+                tx = self.player_x + random.randint(0, 9)
+                ty = self.player_y - 1
+            elif choice == 2:
+                tx = self.player_x + 10
+                ty = self.player_y + random.randint(0, 3)
+            else:
+                tx = self.player_x + random.randint(0, 9)
+                ty = self.player_y + 4
+            tx, ty = self.wrap(tx, ty)
 
-        if self.tile(tx, ty) == "0":
-            self.monsters.append(Monster(who=who, x=tx, y=ty, hits=self.level(who)))
-            self.set_tile(tx, ty, who)
+            if self.tile(tx, ty) == "0" and self._monster_region_ok(who, tx, ty):
+                self.monsters.append(Monster(who=who, x=tx, y=ty, hits=self.level(who)))
+                self.set_tile(tx, ty, who)
+                return
 
     def move_monsters(self) -> None:
         for m in self.monsters:
@@ -544,32 +578,38 @@ class Game:
             self.player_x, self.player_y = tx, ty
 
     def check_message(self) -> None:
-        cx, cy = self.player_x + 1, self.player_y + 1  # convert to Pascal-like 1-based
         self.message_lines = []
         any_message = False
 
-        if (cx, cy) == (13, 6):
+        pos = (self.player_x, self.player_y)
+        cave = self.special_positions.get("c")
+        tomb = self.special_positions.get("h")
+        goddess = self.special_positions.get("A")
+        shoemaker = self.special_positions.get("v")
+        cave_end = self.special_positions.get("C")
+
+        if cave and pos == cave:
             self.mes_num = 1
             self.choco_num = 1
             any_message = True
-        elif (cx, cy) == (17, 41):
+        elif tomb and pos == tomb:
             self.mes_num = 0
             any_message = True
-        elif (cx, cy) == (96, 43):
+        elif goddess and pos == goddess:
             any_message = True
             if self.choco_num == 0:
                 self.mes_num = 2
             else:
                 self.mes_num = 3
                 self.gem_num = 1
-        elif (cx, cy) == (89, 8):
+        elif shoemaker and pos == shoemaker:
             any_message = True
-            if self.gem_num == 1:
+            if self.choco_num == 1 or self.gem_num == 1:
                 self.mes_num = 5
                 self.shoes_num = 1
             else:
                 self.mes_num = 4
-        elif (cx, cy) == (102, 29):
+        elif cave_end and pos == cave_end:
             any_message = True
             self.mes_num = 6
 
