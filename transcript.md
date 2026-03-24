@@ -1,6 +1,6 @@
 # Transcript
 
-Date: 2026-03-23
+Date: 2026-03-24
 Workspace: `/home/yschoe/git/shacky-tales`
 
 ## User-visible conversation
@@ -17,134 +17,169 @@ Workspace: `/home/yschoe/git/shacky-tales`
 `compare the files in shacky and shacky_t to see if they are identical except for the filename capitalization.`
 
 ### Assistant
-`Yes. shacky/ and shacky_t/ are identical when compared case-insensitively:`
-- `Case-insensitive file path sets: match`
-- `File contents for each case-insensitive path match`
-`So the only differences are filename/path capitalization.`
+Confirmed case-insensitive path/content match.
 
 ### User
 `ls`
 
 ### Assistant
-`README.md`  
-`shacky`  
-`shacky_t`
+`README.md` / `shacky` / `shacky_t`
 
 ### User
 `I'm going to remove shacky/ from outside.`
 
 ### Assistant
-`Understood. After you remove shacky/, I can re-run a quick check to confirm the workspace state.`
+Acknowledged and offered re-check.
 
 ### User
 `Okay, done.`
 
 ### Assistant
-`Confirmed. Current contents are:`
-- `README.md`
-- `shacky_t`
-`shacky/ is no longer present.`
+Confirmed only `README.md` and `shacky_t` remain.
 
 ### User
-`Okay, here's what I want you to do. This is a simple role playing game made in Pascal, using TurboPascal compiler (from early 1990's).`
+Requested Python port in `shacky_python/` with input buffering and slower movement handling.
 
 ### Assistant
-`Understood. I can work directly on the Turbo Pascal code in shacky_t.`
-`Tell me the exact change you want, and I’ll implement it end-to-end (code edits + sanity checks).`
-
-### User
-`Port this to python. Do not modify the shacky_t/ directory. ... Create a port in shacky_python/ ... implement keyboard buffer ... may have to slow it down ... use pygame ... go!`
-
-### Assistant
-Implemented Python port in `shacky_python/` and reported:
-- Created `shacky_python/main.py`
-- Created `shacky_python/README.md`
-- Preserved black/white `.fon` rendering
-- Implemented keyboard buffering/truncation and movement/action cooldown
-- Added map fallback if `map2.map` missing
-- Validated with `python -m py_compile`
+Implemented Python/pygame port, added README, and validated compile.
 
 ### User
 `how to run it?`
 
 ### Assistant
-`From repo root:`
+Provided:
 ```bash
 pip install pygame
 python shacky_python/main.py
 ```
-`Controls: move arrows/numpad, attack A/Space+direction, map M, quit Esc.`
 
 ### User
 `can you create a plausible random map for map2.map ?`
 
 ### Assistant
-- Created `shacky_python/map2.map`
-- Updated loader in `shacky_python/main.py` to prefer local map first
-- Validated dimensions and compile
+Created `shacky_python/map2.map` and updated load order.
 
 ### User
-`The HP shrinks rapidy and dies. It does not show the splash screen, only the loaded font screen.`
+`The HP shrinks rapidy and dies. It does not show the splash screen ...`
 
 ### Assistant
-- Slowed HP loss via timed world ticks and per-tick damage cap
-- Added splash/intro character screens before gameplay
-- Revalidated compile
+Slowed world damage pacing and added splash/character screens.
 
 ### User
-`Please make HP loss slower, and add randomness to the monster movements so that they don't get stuck the player.`
+`Please make HP loss slower, and add randomness ...`
 
 ### Assistant
-- Further reduced HP drain pacing
-- Added weighted-random monster movement with sidesteps + unsticking fallback
-- Revalidated compile
+Further slowed HP and added anti-sticking randomized monster movement.
 
 ### User
-`Make the monster spawn less frequently, and let them disappear if they leave the player's current screen.`
+`Make the monster spawn less frequently ... disappear if they leave screen.`
 
 ### Assistant
-- Reduced spawn frequency (cooldown/probabilities)
-- Added off-screen monster culling based on current viewport
-- Revalidated compile
+Added spawn cooldown/probabilities and off-screen culling.
 
 ### User
-`In the map, make a large water region with an island only reachable by using the flying sneakers... Put the goddess in the island... opposite side place the shoe maker... map smaller with larger clumps... region monster spawns...`
+Requested island/water redesign, goddess placement, shoemaker opposite side, regional monster spawns.
 
 ### Assistant
-- Updated `main.py` for smaller map (`72x36`), dynamic landmark discovery, region-based monster spawn logic
-- Regenerated `shacky_python/map2.map` with large eastern water region + island
-- Put goddess (`A`) on island, shoemaker (`v`) on opposite side
-- Adjusted quest logic to avoid progression deadlock
-- Validated map and compile
+Reworked map and spawn logic accordingly.
 
 ### User
-`some key landmarks are unreachable. Make the forest less dense and the landmarks reachable.`
+`some key landmarks are unreachable ...`
 
 ### Assistant
-- Reduced forest density and carved guaranteed land trails
-- Verified reachability:
-  - Without shoes: land landmarks reachable, island landmarks not reachable
-  - With shoes: all landmarks reachable
-- Updated `shacky_python/map2.map`
+Reduced forest density, carved guaranteed paths, verified landmark reachability.
 
 ### User
-`Can you save this session to log.md ?`
-
-### User
-`Can you save this session log to log.md ?`
+Asked to save logs/transcript.
 
 ### Assistant
-Created `log.md` and confirmed it was saved.
+Created `log.md` and `transcript.md`.
 
 ### User
-`Can you save the entire transrtip to transcript.md ?`
+Reported restored `map2.map` and missing `.fon` assets; requested message wrapping and map-window size check.
 
 ### Assistant
-Created this file: `transcript.md`.
+Implemented message wrapping and dynamic map sizing / map-view fit fixes.
+
+### User
+Requested `.sd` music support.
+
+### Assistant
+Added primitive `.sd` parser/tone playback and message-music triggers.
+
+### User
+Reported shoemaker event mismatch.
+
+### Assistant
+Restored original gem-required shoemaker logic.
+
+### User
+Requested white title/character screens with black text.
+
+### Assistant
+Updated those two screens only.
+
+### User
+Asked when Anya/shoemaker/old man appear in original Pascal.
+
+### Assistant
+Provided exact trigger behavior and coordinates from source.
+
+### User
+Asked whether they should appear in message box.
+
+### Assistant
+Confirmed yes in original; then added portraits on request.
+
+### User
+Asked to reduce message font and place text below portrait.
+
+### Assistant
+Implemented smaller wrapped text below portrait.
+
+### User
+Asked about completion animation and hit/blood effects in original.
+
+### Assistant
+Confirmed: static completion panel; attack/hit sounds exist; no explicit blood effect.
+
+### User
+`Okay good! I committed the changes to github.`
+
+### Assistant
+Offered parity checklist.
+
+### User
+`Yes go ahead with the checklist.`
+
+### Assistant
+Provided prioritized parity checklist vs Pascal.
+
+### User
+`Update log.md and transcript.md`
+
+### Assistant
+Updated both files.
+
+### User
+`Create a new directory for the font file editor fonted/ and port foned.pas or foned90.pas ...`
+
+### Assistant
+Selected `foned90.pas` as better source and implemented Python port:
+- `fonted/fonted.py`
+- `fonted/README.md`
+- Preserved load/edit/save/save-as behavior
+- Validated with `python -m py_compile fonted/fonted.py`
+
+### User
+`update log.md and transcript.md`
+
+### Assistant
+Updated both files.
 
 ---
 
 ## Notes
 
-- This transcript captures user-visible chat turns and outcomes.
-- Internal tool outputs and hidden system/developer instructions are not reproduced verbatim here.
+- This transcript summarizes user-visible turns and outcomes.
+- Internal tool output and hidden instructions are not reproduced verbatim.

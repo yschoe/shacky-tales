@@ -1,6 +1,6 @@
 # Session Log
 
-Date: 2026-03-23
+Date: 2026-03-24
 Workspace: `/home/yschoe/git/shacky-tales`
 
 ## Timeline
@@ -26,15 +26,29 @@ Workspace: `/home/yschoe/git/shacky-tales`
    - Reduced forest density.
    - Carved explicit trail corridors so land landmarks are reachable on foot.
    - Kept island landmarks reachable only with shoes (water traversal).
-13. Verified key checks throughout with `python -m py_compile shacky_python/main.py` and map reachability scripts.
+13. User restored original assets (`map2.map` and missing `.fon` files).
+14. Updated Python port to support dynamic map dimensions from loaded map file.
+15. Added proper message-box word wrapping and map-view sizing fixes.
+16. Added primitive `.sd` music playback based on Pascal `sounds.pas`.
+17. Restored shoemaker gate logic to original behavior (requires gem).
+18. Updated splash and characters screens to white background / black text.
+19. Added message-box portraits for dialog events.
+20. Reduced message font and placed wrapped text below portrait.
+21. Produced a parity checklist versus `shacky_t/shacky.pas`.
+22. Created `fonted/` and ported **`foned90.pas`** to Python as `fonted/fonted.py`.
+23. Added `fonted/README.md` and validated with `python -m py_compile fonted/fonted.py`.
 
 ## Files Created/Updated During Session
 
 - `shacky_python/main.py`
 - `shacky_python/README.md`
 - `shacky_python/map2.map`
+- `fonted/fonted.py`
+- `fonted/README.md`
+- `log.md`
+- `transcript.md`
 
 ## Latest Request
 
-- User asked to save this session log to `log.md`.
-- This file was created at: `log.md`.
+- User asked: `update log.md and transcript.md`
+- Both files updated.
