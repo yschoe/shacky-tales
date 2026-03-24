@@ -1,4 +1,4 @@
-# Shacky Tales
+# Shacky Tale
 
 A Simple role-playing game originally written in Pascal for a college project (1989).
 
