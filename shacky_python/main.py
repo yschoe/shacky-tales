@@ -6,6 +6,8 @@ from __future__ import annotations
 import random
 import sys
 import time
+import math
+from array import array
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +50,13 @@ class Monster:
     x: int
     y: int
     hits: int
+
+
+@dataclass
+class SongEvent:
+    is_sound: bool
+    hz: int
+    ms: int
 
 
 ASSET_ALIASES = {
@@ -185,12 +194,14 @@ class InputBuffer:
 
 class Game:
     def __init__(self) -> None:
+        pygame.mixer.pre_init(22050, -16, 1, 512)
         pygame.init()
         pygame.display.set_caption("Shacky Tale (Python)")
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Courier New", 16)
         self.small = pygame.font.SysFont("Courier New", 13)
+        self.tiny = pygame.font.SysFont("Courier New", 11)
         self.big = pygame.font.SysFont("Courier New", 28, bold=True)
 
         self.base_dir = Path(__file__).resolve().parent
@@ -226,6 +237,15 @@ class Game:
         self.last_world_tick_ms = 0
         self.last_spawn_ms = 0
         self.message_lines: List[str] = []
+        self.music_enabled = pygame.mixer.get_init() is not None
+        self.music_channel = pygame.mixer.Channel(0) if self.music_enabled else None
+        self.song_cache: Dict[str, List[SongEvent]] = {}
+        self.tone_cache: Dict[Tuple[int, int], pygame.mixer.Sound] = {}
+        self.current_song: List[SongEvent] | None = None
+        self.current_song_idx = 0
+        self.current_song_loop = False
+        self.song_event_end_ms = 0
+        self.last_message_music_key: Tuple[int, Tuple[int, int]] | None = None
         self._place_player_on_walkable_tile()
 
     def _fon_path(self, name: str) -> Path:
@@ -251,6 +271,115 @@ class Game:
                 if row[x] == "1":
                     surf.set_at((x, y), WHITE)
         return surf.convert()
+
+    def _find_song_file(self, name: str) -> Path | None:
+        candidates = [self.base_dir / name, self.asset_dir / name]
+        for path in candidates:
+            if path.exists():
+                return path
+        lower = name.lower()
+        for folder in (self.base_dir, self.asset_dir):
+            for path in folder.glob("*.sd"):
+                if path.name.lower() == lower:
+                    return path
+        return None
+
+    def _load_song_events(self, song_name: str) -> List[SongEvent]:
+        song_path = self._find_song_file(song_name)
+        if song_path is None:
+            return []
+        cache_key = str(song_path.resolve())
+        if cache_key in self.song_cache:
+            return self.song_cache[cache_key]
+
+        events: List[SongEvent] = []
+        for raw in song_path.read_text(encoding="ascii", errors="ignore").splitlines():
+            parts = raw.split()
+            if not parts:
+                continue
+            marker = parts[0].upper()
+            if marker == "E":
+                break
+            if len(parts) < 3:
+                continue
+            try:
+                hz = max(0, int(parts[1]))
+                ms = max(0, int(parts[2]))
+            except ValueError:
+                continue
+            events.append(SongEvent(is_sound=(marker == "S"), hz=hz, ms=ms))
+
+        self.song_cache[cache_key] = events
+        return events
+
+    def _build_tone(self, hz: int, ms: int) -> pygame.mixer.Sound | None:
+        if not self.music_enabled or hz <= 0 or ms <= 0:
+            return None
+        key = (hz, ms)
+        if key in self.tone_cache:
+            return self.tone_cache[key]
+
+        sample_rate = 22050
+        n_samples = max(1, int(sample_rate * (ms / 1000.0)))
+        amplitude = 8000
+        wave = array("h")
+        for i in range(n_samples):
+            phase = 2.0 * math.pi * hz * (i / sample_rate)
+            wave.append(int(amplitude * math.sin(phase)))
+        sound = pygame.mixer.Sound(buffer=wave)
+        self.tone_cache[key] = sound
+        return sound
+
+    def play_song(self, song_name: str, loop: bool = False) -> None:
+        if not self.music_enabled:
+            return
+        events = self._load_song_events(song_name)
+        if not events:
+            return
+        self.current_song = events
+        self.current_song_idx = 0
+        self.current_song_loop = loop
+        self.song_event_end_ms = 0
+        if self.music_channel:
+            self.music_channel.stop()
+
+    def update_music(self, now_ms: int) -> None:
+        if not self.music_enabled or self.current_song is None:
+            return
+        if now_ms < self.song_event_end_ms:
+            return
+        if self.current_song_idx >= len(self.current_song):
+            if self.current_song_loop:
+                self.current_song_idx = 0
+            else:
+                self.current_song = None
+                return
+
+        event = self.current_song[self.current_song_idx]
+        self.current_song_idx += 1
+        self.song_event_end_ms = now_ms + event.ms
+        if event.is_sound:
+            tone = self._build_tone(event.hz, event.ms)
+            if tone and self.music_channel:
+                self.music_channel.play(tone)
+
+    def play_message_music(self, mes_num: int, pos: Tuple[int, int]) -> None:
+        key = (mes_num, pos)
+        if self.last_message_music_key == key:
+            return
+        self.last_message_music_key = key
+        song_map = {
+            0: "tomb.sd",
+            1: "stin.sd",
+            2: "anya.sd",
+            3: "anya.sd",
+            4: "stin.sd",
+            5: "stin.sd",
+            6: "sayo2.sd",
+        }
+        song = song_map.get(mes_num)
+        if song:
+            self.play_song(song, loop=False)
 
     def _load_sprites(self) -> Dict[str, pygame.Surface]:
         sprites: Dict[str, pygame.Surface] = {}
@@ -365,8 +494,8 @@ class Game:
         self.blit_text("ITEMS", 660, 272)
         self.blit_text("Shacky Tale", 600, 8, big=True)
 
-    def blit_text(self, text: str, x: int, y: int, big: bool = False) -> None:
-        surf = (self.big if big else self.font).render(text, True, WHITE)
+    def blit_text(self, text: str, x: int, y: int, big: bool = False, color: Tuple[int, int, int] = WHITE) -> None:
+        surf = (self.big if big else self.font).render(text, True, color)
         self.screen.blit(surf, (x, y))
 
     def draw_bars(self) -> None:
@@ -411,27 +540,61 @@ class Game:
     def draw_message_box(self) -> None:
         pygame.draw.rect(self.screen, BLACK, (591, 71, 118, 198))
         self.blit_text("MESSAGES", 604, 75)
-        y = 100
+        portrait_key = self._message_portrait_key()
+        if portrait_key is not None:
+            self.screen.blit(self.sprites[portrait_key], (600, 100))
+        y = 156
+        line_step = 13
+        max_lines = 8
         wrapped: List[str] = []
         for line in self.message_lines:
-            wrapped.extend(self._wrap_text(line, 18))
-        for line in wrapped[:10]:
-            surf = self.small.render(line, True, WHITE)
+            wrapped.extend(self._wrap_text_px(line, self.tiny, 112))
+        for line in wrapped[:max_lines]:
+            surf = self.tiny.render(line, True, WHITE)
             self.screen.blit(surf, (595, y))
-            y += 16
+            y += line_step
 
-    def _wrap_text(self, text: str, width: int) -> List[str]:
+    def _message_portrait_key(self) -> str | None:
+        if not self.message_lines:
+            return None
+        # Match Pascal talk() portraits in mymessag.pas
+        portrait_by_message = {
+            0: "tomb",   # old grave man/tomb event
+            1: "choco",  # chocolate discovery
+            2: "anya",
+            3: "anya",
+            4: "shoem",
+            5: "shoem",
+            6: "princess",
+        }
+        return portrait_by_message.get(self.mes_num)
+
+    def _wrap_text_px(self, text: str, font: pygame.font.Font, max_px: int) -> List[str]:
         words = text.split()
         if not words:
             return [""]
         lines: List[str] = []
         current = words[0]
         for word in words[1:]:
-            if len(current) + 1 + len(word) <= width:
-                current += " " + word
+            candidate = current + " " + word
+            if font.size(candidate)[0] <= max_px:
+                current = candidate
             else:
                 lines.append(current)
-                current = word
+                # If single word is longer than line, hard-split by width.
+                if font.size(word)[0] <= max_px:
+                    current = word
+                else:
+                    chunk = ""
+                    for ch in word:
+                        test = chunk + ch
+                        if font.size(test)[0] <= max_px:
+                            chunk = test
+                        else:
+                            if chunk:
+                                lines.append(chunk)
+                            chunk = ch
+                    current = chunk if chunk else word
         lines.append(current)
         return lines
 
@@ -638,7 +801,8 @@ class Game:
                 self.gem_num = 1
         elif shoemaker and pos == shoemaker:
             any_message = True
-            if self.choco_num == 1 or self.gem_num == 1:
+            # Match original Pascal logic: shoemaker requires gem.
+            if self.gem_num == 1:
                 self.mes_num = 5
                 self.shoes_num = 1
             else:
@@ -649,6 +813,7 @@ class Game:
 
         if any_message:
             self.message_lines = MESSAGES.get(self.mes_num, [])
+            self.play_message_music(self.mes_num, pos)
             if self.mes_num == 6:
                 self.victory = True
                 self.break_game = True
@@ -824,37 +989,37 @@ class Game:
             self.clock.tick(30)
 
     def splash_screen(self) -> bool:
-        self.screen.fill(BLACK)
-        pygame.draw.rect(self.screen, WHITE, (40, 15, 560, 76), 1)
-        self.blit_text("Shacky Tale", 185, 35, big=True)
+        self.screen.fill(WHITE)
+        pygame.draw.rect(self.screen, BLACK, (40, 15, 560, 76), 1)
+        self.blit_text("Shacky Tale", 185, 35, big=True, color=BLACK)
         self.screen.blit(self.sprites["princess"], (190, 170))
         self.screen.blit(self.sprites["player_l"], (320, 170))
         self.screen.blit(self.sprites["heart"], (255, 120))
-        self.blit_text("PATIENCE! Loading characters...", 160, 300)
-        self.blit_text("Press any key to continue", 210, 322)
+        self.blit_text("PATIENCE! Loading characters...", 160, 300, color=BLACK)
+        self.blit_text("Press any key to continue", 210, 322, color=BLACK)
         pygame.display.flip()
         return self.wait_for_any_key()
 
     def characters_screen(self) -> bool:
-        self.screen.fill(BLACK)
-        pygame.draw.rect(self.screen, WHITE, (35, 30, 630, 50), 1)
-        self.blit_text("Characters", 250, 43, big=True)
+        self.screen.fill(WHITE)
+        pygame.draw.rect(self.screen, BLACK, (35, 30, 630, 50), 1)
+        self.blit_text("Characters", 250, 43, big=True, color=BLACK)
         self.screen.blit(self.sprites["princess"], (90, 90))
-        self.blit_text("princess", 155, 120)
+        self.blit_text("princess", 155, 120, color=BLACK)
         self.screen.blit(self.sprites["player_l"], (300, 90))
-        self.blit_text("shacky", 365, 120)
+        self.blit_text("shacky", 365, 120, color=BLACK)
 
-        self.blit_text("MONSTERS", 90, 170)
+        self.blit_text("MONSTERS", 90, 170, color=BLACK)
         self.screen.blit(self.sprites["skeleton"], (90, 190))
         self.screen.blit(self.sprites["fox"], (145, 190))
         self.screen.blit(self.sprites["bat"], (200, 190))
         self.screen.blit(self.sprites["slime"], (255, 190))
 
-        self.blit_text("OTHERS", 90, 265)
+        self.blit_text("OTHERS", 90, 265, color=BLACK)
         self.screen.blit(self.sprites["anya"], (90, 285))
         self.screen.blit(self.sprites["tomb"], (145, 285))
         self.screen.blit(self.sprites["shoem"], (200, 285))
-        self.blit_text("Press any key to start game", 350, 302)
+        self.blit_text("Press any key to start game", 350, 302, color=BLACK)
         pygame.display.flip()
         return self.wait_for_any_key()
 
@@ -899,6 +1064,7 @@ class Game:
             had_action = False
             for event in pygame.event.get():
                 self.handle_event(event)
+            self.update_music(pygame.time.get_ticks())
 
             action = self.buffer.pop()
             if action:
@@ -913,6 +1079,8 @@ class Game:
             self.clock.tick(FPS)
 
         self.ending_screen()
+        if self.music_channel:
+            self.music_channel.stop()
         pygame.quit()
 
 
