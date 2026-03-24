@@ -20,8 +20,6 @@ Some screenshots:
 
 ![game play](img/img3.png)
 
-![game play](img/img4.png)
-
 ![game play](img/img5.png)
 
 
