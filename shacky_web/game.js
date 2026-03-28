@@ -37,6 +37,11 @@
     lite: '#ffffff',
     dark: '#111111',
     red: '#ff0000',
+    green: '#00ff00',
+    cyan: '#00ffff',
+    gray: '#646464',
+    magenta: '#ff00ff',
+    landmark: '#ffd400',
   };
 
   const SPRITE_FILES = {
@@ -1008,12 +1013,33 @@
       const ox = 30 + ((viewW - miniW) >> 1);
       const oy = 20 + ((viewH - miniH) >> 1);
 
+      const colorByTile = {
+        '0': COLOR.white,
+        '1': COLOR.green,
+        '2': COLOR.black,
+        '3': COLOR.cyan,
+        'w': COLOR.gray,
+        'f': COLOR.white,
+        's': COLOR.white,
+        'b': COLOR.white,
+        'S': COLOR.white,
+        // Major landmarks emphasized.
+        'c': COLOR.landmark,
+        'C': COLOR.landmark,
+        'h': COLOR.landmark,
+        'v': COLOR.landmark,
+        'A': COLOR.landmark,
+      };
+
       for (let y = 0; y < this.mapH; y += 1) {
         for (let x = 0; x < this.mapW; x += 1) {
           const ch = this.map[y][x];
-          if (ch === '0') continue;
-          c.fillStyle = COLOR.black;
+          c.fillStyle = colorByTile[ch] || COLOR.white;
           c.fillRect(ox + x * scale, oy + y * scale, scale, scale);
+          if (ch === 'c' || ch === 'C' || ch === 'h' || ch === 'v' || ch === 'A') {
+            c.strokeStyle = COLOR.red;
+            c.strokeRect(ox + x * scale + 0.5, oy + y * scale + 0.5, Math.max(1, scale - 1), Math.max(1, scale - 1));
+          }
         }
       }
       c.fillStyle = COLOR.red;
